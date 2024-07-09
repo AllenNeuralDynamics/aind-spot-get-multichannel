@@ -147,7 +147,7 @@ def create_logger(output_log_path: str) -> logging.Logger:
         Created logger pointing to
         the file path.
     """
-    CURR_DATE_TIME = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    # CURR_DATE_TIME = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     LOGS_FILE = f"{output_log_path}/puncta_log.log"  # _{CURR_DATE_TIME}
 
     logging.basicConfig(
@@ -207,11 +207,16 @@ def get_code_ocean_cpu_limit():
         return co_cpus
     if aws_batch_job_id:
         return 1
-    with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as fp:
-        cfs_quota_us = int(fp.read())
-    with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as fp:
-        cfs_period_us = int(fp.read())
-    container_cpus = cfs_quota_us // cfs_period_us
+    try:
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as fp:
+            cfs_quota_us = int(fp.read())
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as fp:
+            cfs_period_us = int(fp.read())
+        container_cpus = cfs_quota_us // cfs_period_us
+
+    except FileNotFoundError:
+        container_cpus = 0
+
     # For physical machine, the `cfs_quota_us` could be '-1'
     return psutil.cpu_count(logical=False) if container_cpus < 1 else container_cpus
 
@@ -225,7 +230,8 @@ def print_system_information(logger: logging.Logger):
     logger: logging.Logger
         Logger object
     """
-    co_memory = int(os.environ.get("CO_MEMORY"))
+    co_memory = os.environ.get("CO_MEMORY")
+    co_memory = int(co_memory) if co_memory else 0
     # System info
     sep = "=" * 20
     logger.info(f"{sep} Code Ocean Information {sep}")

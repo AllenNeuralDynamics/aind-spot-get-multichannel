@@ -1,5 +1,5 @@
 """
-Large-scale puncta detection using single GPU
+Large-scale computation of spot statistics
 """
 
 import logging
@@ -13,15 +13,14 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import psutil
 import torch
+from _shared.types import ArrayLike, PathLike
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
     recover_global_position, unpad_global_coords)
 from aind_large_scale_prediction.io import ImageReaderFactory
 from get_spot_chn_stats import get_spot_chn_stats
 from scipy import spatial
-
-from ._shared.types import ArrayLike, PathLike
-from .utils import utils
+from utils import utils
 
 
 def remove_points_in_pad_area(
@@ -327,7 +326,7 @@ def helper_submit_jobs(
 def z1_multichannel_stats(
     dataset_path: PathLike,
     multiscale: str,
-    multichannel_spots: Dict[ArrayLike],
+    multichannel_spots: Dict,
     prediction_chunksize: Tuple[int, ...],
     target_size_mb: int,
     n_workers: int,
@@ -391,7 +390,7 @@ def z1_multichannel_stats(
 
     """
     co_cpus = int(utils.get_code_ocean_cpu_limit())
-    channel_name = Path(dataset_path.stem)
+    channel_name = Path(dataset_path).stem
 
     if n_workers > co_cpus:
         raise ValueError(f"Provided workers {n_workers} > current workers {co_cpus}")
@@ -433,17 +432,13 @@ def z1_multichannel_stats(
         pin_memory = False
         multiprocessing.set_start_method("spawn", force=True)
 
-    lazy_data = (
-        ImageReaderFactory()
-        .create(data_path=dataset_path, parse_path=False, multiscale=multiscale)
-        .as_dask_array()
+    image_reader = ImageReaderFactory().create(
+        data_path=dataset_path, parse_path=False, multiscale=multiscale
     )
 
-    image_metadata = (
-        ImageReaderFactory()
-        .create(data_path=dataset_path, parse_path=False, multiscale=multiscale)
-        .metadata()
-    )
+    lazy_data = image_reader.as_dask_array()
+
+    image_metadata = image_reader.metadata()
 
     logger.info(f"Full image metadata: {image_metadata}")
 
@@ -493,7 +488,7 @@ def z1_multichannel_stats(
     # Variables for multiprocessing
     picked_blocks = []
     curr_picked_blocks = 0
-    multichannel_final_spots = {key: None for key in list(multichannel_spots)}
+    multichannel_final_spots = {key: None for key in list(multichannel_spots.keys())}
 
     for i, sample in enumerate(zarr_data_loader):
         logger.info(
