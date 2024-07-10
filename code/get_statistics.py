@@ -468,7 +468,7 @@ def z1_multichannel_stats(
     )
 
     logger.info(
-        f"Running puncta detection in chunked data. Prediction chunksize: {prediction_chunksize} - Overlap chunksize: {overlap_prediction_chunksize}"
+        f"Running statistics. Prediction chunksize: {prediction_chunksize} - Overlap chunksize: {overlap_prediction_chunksize}"
     )
 
     start_time = time()
@@ -476,7 +476,7 @@ def z1_multichannel_stats(
     total_batches = np.prod(zarr_dataset.lazy_data.shape) / (
         np.prod(zarr_dataset.prediction_chunksize) * batch_size
     )
-    samples_per_iter = n_workers * batch_size
+    # samples_per_iter = n_workers * batch_size
     logger.info(f"Number of batches: {total_batches}")
 
     # Setting exec workers to CO CPUs
