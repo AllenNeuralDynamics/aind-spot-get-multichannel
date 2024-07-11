@@ -10,9 +10,11 @@ For channel 0, we need to get statistics in all the ZYX locations
 from ch1, ch2, and ch3.
 """
 
+import os
 from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
+
 from _shared.types import ArrayLike
 
 
@@ -195,6 +197,12 @@ def get_spot_chn_stats(
         ]
     )
 
+    if spots_in_block.shape[0] != spots_fg_bg.shape[0]:
+        raise ValueError(
+            f"Worker {os.getpid()} -> Spots in block and given stats are not the same!"
+        )
+
+    #     print(f"Worker {os.getpid()} -> spots in block: {spots_in_block.shape} - stats: {spots_fg_bg.shape}")
     # horizontal stacking
     spots_in_block = np.append(spots_in_block.T, spots_fg_bg.T, axis=0).T
 

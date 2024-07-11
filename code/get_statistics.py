@@ -13,13 +13,14 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import psutil
 import torch
-from _shared.types import ArrayLike, PathLike
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
     recover_global_position, unpad_global_coords)
 from aind_large_scale_prediction.io import ImageReaderFactory
-from get_spot_chn_stats import get_spot_chn_stats
 from scipy import spatial
+
+from _shared.types import ArrayLike, PathLike
+from get_spot_chn_stats import get_spot_chn_stats
 from utils import utils
 
 
@@ -51,18 +52,22 @@ def remove_points_in_pad_area(
     # Validating seeds are within block boundaries
     unpadded_points = points[
         (points[:, 0] >= unpadded_slices[0].start)  # within Z boundaries
-        & (points[:, 0] <= unpadded_slices[0].stop)
+        & (points[:, 0] < unpadded_slices[0].stop)
         & (points[:, 1] >= unpadded_slices[1].start)  # Within Y boundaries
-        & (points[:, 1] <= unpadded_slices[1].stop)
+        & (points[:, 1] < unpadded_slices[1].stop)
         & (points[:, 2] >= unpadded_slices[2].start)  # Within X boundaries
-        & (points[:, 2] <= unpadded_slices[2].stop)
+        & (points[:, 2] < unpadded_slices[2].stop)
     ]
 
     return unpadded_points
 
 
 def get_points_in_boundaries(
-    points: ArrayLike, location_slices: Tuple[ArrayLike], shift: Optional[bool] = True
+    points: ArrayLike,
+    location_slices: Tuple[ArrayLike],
+    shift: Optional[bool] = True,
+    unpadded_local_slice=None,
+    #     data_block=None, chn_name=None,
 ) -> ArrayLike:
     """
     Returns the points that fill within a given
@@ -87,57 +92,39 @@ def get_points_in_boundaries(
     ArrayLike
         Array with the extracted points.
     """
+    # These are the global slices
     start_slices = location_slices[0]
     stop_slices = location_slices[1]
 
     start_condition = np.all(points[:, :3] >= start_slices, axis=1)
-    stop_condition = np.all(points[:, :3] >= stop_slices, axis=1)
+    stop_condition = np.all(points[:, :3] < stop_slices, axis=1)
 
-    extracted_rows = points[:, :3][np.logical_and(start_condition, stop_condition)]
+    extracted_rows_global = points[:, :3][
+        np.logical_and(start_condition, stop_condition)
+    ]
+
+    if not extracted_rows_global.shape[0]:
+        return None
+
+    #     print(f"{os.getpid()} -> start: {start_slices} - end: {stop_slices} -> extracted: {extracted_rows_global}")
+    returned_spots = extracted_rows_global
 
     if shift:
-        min_zyx = -np.min(extracted_rows, axis=0)
-        extracted_rows += min_zyx
+        #         min_zyx = np.min(extracted_rows, axis=0)
+        extracted_rows_local = extracted_rows_global - start_slices  # min_zyx
+        extracted_rows_local = remove_points_in_pad_area(
+            points=extracted_rows_local, unpadded_slices=unpadded_local_slice
+        )
+        returned_spots = extracted_rows_local
+    #         np.save(f"/results/test_spots_{start_slices.flatten()}-{stop_slices.flatten()}_chn_{chn_name}.npy", extracted_rows_local)
+    #         np.save(f"/results/test_block_{start_slices.flatten()}-{stop_slices.flatten()}_chn_{chn_name}.npy", data_block)
 
-    return extracted_rows
+    #     print(f"{os.getpid()} -> after shifting extracted: {returned_spots}")
+    #     exit()
+    if not returned_spots.shape[0]:
+        returned_spots = None
 
-
-def prune_blobs(
-    blobs_array: ArrayLike, distance: int, eps=0
-) -> Tuple[ArrayLike, ArrayLike]:
-    """
-    Prune blobs based on a radius distance.
-
-    Parameters
-    ----------
-    blobs_array: ArrayLike
-        Array that contains the YX position of
-        the identified blobs.
-
-    distance: int
-        Minimum distance to prune blobs
-
-    Returns
-    -------
-    Tuple[ArrayLike, ArrayLike]
-    cupy.ndarray
-        Cupy array with the pruned blobs
-    np.array
-        Removed spots positions
-    """
-    tree = spatial.cKDTree(blobs_array[:, :3])
-    pairs = np.array(list(tree.query_pairs(distance, eps=eps)))
-    removed_positions = []
-    for i, j in pairs:
-        blob1, blob2 = blobs_array[i], blobs_array[j]
-        if blob1[-1] > blob2[-1]:
-            removed_positions.append(j)
-            blob2[-1] = 0
-        else:
-            removed_positions.append(i)
-            blob1[-1] = 0
-
-    return blobs_array[blobs_array[:, -1] > 0], np.array(removed_positions)
+    return returned_spots
 
 
 def execute_worker(
@@ -209,22 +196,36 @@ def execute_worker(
         dataset_shape=dataset_shape[-3:],  # zarr_dataset.lazy_data.shape,
     )
 
+    #     print(f"Worker {os.getpid()} -> internal slice: {batch_internal_slice} - superchunk: {batch_super_chunk} - Global pos: {global_coord_pos} - unpadded: {unpadded_global_slice} - unpadded local: {unpadded_local_slice}")
+    #     exit()
     worker_spt_chn_statistics = {}
 
     for spot_channel_name, global_spots in multichannel_spots.items():
 
+        #         print(f"Worker {os.getpid()} -> Spot channel name: {spot_channel_name}")
+        start_pos, stop_pos = [], []
+
+        for pad_sl in global_coord_pos:
+            start_pos.append(pad_sl.start)
+            stop_pos.append(pad_sl.stop)
+
+        #         print(f"Worker {os.getpid()} -> start pos: {start_pos} stop pos: {stop_pos}")
+        #         exit()
         # Getting spots in the block and shifting them to local coord
         spots_in_block = get_points_in_boundaries(
             points=global_spots,
             location_slices=(
-                np.array(global_coord_positions_start),
-                np.array(global_coord_positions_end),
+                np.array(start_pos),
+                np.array(stop_pos),
             ),
             shift=True,
+            #             data_block=data_block,
+            #             chn_name=spot_channel_name,
+            unpadded_local_slice=unpadded_local_slice,
         )
 
         # If no spots in block, continue
-        if not spots_in_block.shape[0]:
+        if spots_in_block is None:
             worker_spt_chn_statistics[spot_channel_name] = None
             continue
 
@@ -242,16 +243,16 @@ def execute_worker(
             :, -3:
         ] + np.array(spot_with_statistics[:, :3])
 
-        # Removing points within pad area
-        spot_with_statistics = remove_points_in_pad_area(
-            points=spot_with_statistics, unpadded_slices=unpadded_global_slice
-        )
+        #         # Removing points within pad area
+        #         spot_with_statistics = remove_points_in_pad_area(
+        #             points=spot_with_statistics, unpadded_slices=unpadded_global_slice
+        #         )
 
         logger.info(
-            f"Worker {curr_pid}: Found {len(spot_with_statistics)} spots in global coords: {unpadded_global_slice}"
+            f"Worker {curr_pid}: Found {spot_with_statistics.shape} spots in global coords: {unpadded_global_slice}"
         )
 
-        worker_spt_chn_statistics[spot_channel_name] = spot_with_statistics
+        worker_spt_chn_statistics[spot_channel_name] = spot_with_statistics.copy()
 
     return worker_spt_chn_statistics
 
@@ -391,6 +392,7 @@ def z1_multichannel_stats(
     """
     co_cpus = int(utils.get_code_ocean_cpu_limit())
     channel_name = Path(dataset_path).stem
+    utils.create_folder(dest_dir=str(output_folder), verbose=True)
 
     if n_workers > co_cpus:
         raise ValueError(f"Provided workers {n_workers} > current workers {co_cpus}")
@@ -497,7 +499,7 @@ def z1_multichannel_stats(
 
         picked_blocks.append(
             {
-                "data": sample.batch_tensor,
+                "data_block": sample.batch_tensor.numpy()[0, ...],
                 "multichannel_spots": multichannel_spots,
                 "stats_parameters": stats_parameters,
                 "batch_super_chunk": sample.batch_super_chunk[0],
@@ -540,21 +542,9 @@ def z1_multichannel_stats(
     for spot_channel_name in multichannel_final_spots.keys():
         final_spots = multichannel_final_spots[spot_channel_name].astype(np.float32)
 
-        # Final prunning, might be spots in boundaries where spots where splitted
-        start_final_prunning_time = time()
-        spots_global_coordinate_prunned, removed_pos = prune_blobs(
-            blobs_array=final_spots.copy(),  # Prunning only ZYX locations, careful with Masks IDs
-            distance=3.5,
-        )
-        end_final_prunning_time = time()
-
-        logger.info(
-            f"Time taken for final prunning {end_final_prunning_time - start_final_prunning_time} before: {len(final_spots)} After: {len(spots_global_coordinate_prunned)}"
-        )
-
         # Saving spots
         np.save(
-            f"{output_folder}/ch_{channel_name}_spots_{spot_channel_name}.npy",
+            f"/results/ch_{channel_name}_spots_{spot_channel_name}.npy",
             spots_global_coordinate_prunned,
         )
 
