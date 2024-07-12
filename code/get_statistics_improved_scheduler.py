@@ -22,6 +22,7 @@ from scipy import spatial
 from _shared.types import ArrayLike, PathLike
 from get_spot_chn_stats import get_spot_chn_stats
 from utils import utils
+import queue
 
 
 def remove_points_in_pad_area(
@@ -202,21 +203,12 @@ def execute_worker(
 
     for spot_channel_name, global_spots in multichannel_spots.items():
 
-        #         print(f"Worker {os.getpid()} -> Spot channel name: {spot_channel_name}")
-        start_pos, stop_pos = [], []
-
-        for pad_sl in global_coord_pos:
-            start_pos.append(pad_sl.start)
-            stop_pos.append(pad_sl.stop)
-
-        #         print(f"Worker {os.getpid()} -> start pos: {start_pos} stop pos: {stop_pos}")
-        #         exit()
         # Getting spots in the block and shifting them to local coord
         spots_in_block = get_points_in_boundaries(
             points=global_spots,
             location_slices=(
-                np.array(start_pos),
-                np.array(stop_pos),
+                np.array(global_coord_positions_start),
+                np.array(global_coord_positions_end),
             ),
             shift=True,
             #             data_block=data_block,
@@ -545,7 +537,7 @@ def z1_multichannel_stats(
         # Saving spots
         np.save(
             f"/results/ch_{channel_name}_spots_{spot_channel_name}.npy",
-            final_spots,
+            spots_global_coordinate_prunned,
         )
 
     end_time = time()

@@ -35,7 +35,7 @@ def run():
         "channel_3": np.load(f"{DATA_FOLDER}/HCR_BL6_000_spot_detection_ch4/spots.npy"),
     }
 
-    dataset_path = f"{IMAGE_PATH}/channel_1.zarr"
+    dataset_path = f"{IMAGE_PATH}/channel_4.zarr"
     z1_multichannel_stats(
         dataset_path=dataset_path,
         multiscale="0",
@@ -45,7 +45,7 @@ def run():
         n_workers=0,
         axis_pad=14,
         batch_size=1,
-        output_folder=output_folder.joinpath("channel_1"),
+        output_folder=output_folder.joinpath("channel_4"),
         stats_parameters=stats_parameters,
         logger=logger,
         super_chunksize=None,
