@@ -13,14 +13,13 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import psutil
 import torch
+from _shared.types import ArrayLike, PathLike
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
     recover_global_position, unpad_global_coords)
 from aind_large_scale_prediction.io import ImageReaderFactory
-from scipy import spatial
-
-from _shared.types import ArrayLike, PathLike
 from get_spot_chn_stats import get_spot_chn_stats
+from scipy import spatial
 from utils import utils
 
 
@@ -440,15 +439,15 @@ def z1_multichannel_stats(
 
     lazy_data = image_reader.as_dask_array()
 
-    image_metadata = image_reader.metadata()
+    # image_metadata = image_reader.metadata()
 
-    logger.info(f"Full image metadata: {image_metadata}")
+    # logger.info(f"Full image metadata: {image_metadata}")
 
-    image_metadata = utils.parse_zarr_metadata(
-        metadata=image_metadata, multiscale=multiscale
-    )
+    # image_metadata = utils.parse_zarr_metadata(
+    #     metadata=image_metadata, multiscale=multiscale
+    # )
 
-    logger.info(f"Filtered Image metadata: {image_metadata}")
+    # logger.info(f"Filtered Image metadata: {image_metadata}")
 
     overlap_prediction_chunksize = (axis_pad, axis_pad, axis_pad)
     zarr_data_loader, zarr_dataset = create_data_loader(
@@ -493,6 +492,10 @@ def z1_multichannel_stats(
     multichannel_final_spots = {key: None for key in list(multichannel_spots.keys())}
 
     for i, sample in enumerate(zarr_data_loader):
+        if i == 2000:
+            logger.info(f"Worker {os.getpid()} -> Induced breaking!")
+            break
+
         logger.info(
             f"Batch {i}: {sample.batch_tensor.shape} - Pinned?: {sample.batch_tensor.is_pinned()} - dtype: {sample.batch_tensor.dtype} - device: {sample.batch_tensor.device}"
         )
@@ -563,3 +566,37 @@ def z1_multichannel_stats(
             output_folder,
             "z1_stats",
         )
+
+
+def main():
+    dataset_path = "s3://aind-open-data/HCR_BL6-000_2023-06-1_00-00-00_fused_2024-04-02_20-06-14/channel_1.zarr"
+    # Code Ocean folders
+    RESULTS_FOLDER = Path(os.path.abspath("../results"))
+
+    # Output folder
+    output_folder = RESULTS_FOLDER.joinpath("puncta_stats")
+    utils.create_folder(dest_dir=str(output_folder), verbose=True)
+    logger = utils.create_logger(output_log_path=str(output_folder))
+    stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
+    multichannel_spots = {
+        "channel_1": np.load("/Users/camilo.laiton/Downloads/spots_ch1.npy"),
+    }
+
+    z1_multichannel_stats(
+        dataset_path=dataset_path,
+        multiscale="0",
+        multichannel_spots=multichannel_spots,
+        prediction_chunksize=(128, 128, 128),
+        target_size_mb=3048,
+        n_workers=0,
+        axis_pad=14,
+        batch_size=1,
+        output_folder=output_folder.joinpath("channel_1"),
+        stats_parameters=stats_parameters,
+        logger=logger,
+        super_chunksize=None,
+    )
+
+
+if __name__ == "__main__":
+    main()

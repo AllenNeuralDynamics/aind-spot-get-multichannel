@@ -6,23 +6,22 @@ import logging
 import multiprocessing
 import os
 from pathlib import Path
+from queue import Empty, Full
 # from functools import partial
-from time import time
+from time import sleep, time
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import psutil
 import torch
+from _shared.types import ArrayLike, PathLike
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
     recover_global_position, unpad_global_coords)
 from aind_large_scale_prediction.io import ImageReaderFactory
-from scipy import spatial
-
-from _shared.types import ArrayLike, PathLike
 from get_spot_chn_stats import get_spot_chn_stats
+from scipy import spatial
 from utils import utils
-import queue
 
 
 def remove_points_in_pad_area(
@@ -316,6 +315,109 @@ def helper_submit_jobs(
                     )
 
 
+def producer(
+    producer_queue,
+    zarr_data_loader,
+    logger,
+    n_consumers,
+):
+    # total_samples = sum(zarr_dataset.internal_slice_sum)
+    worker_pid = os.getpid()
+
+    logger.info(f"Starting producer queue: {worker_pid}")
+    for i, sample in enumerate(zarr_data_loader):
+        if i == 2000:
+            logger.info(f"Worker {worker_pid} -> Induced breaking!")
+            break
+
+        producer_queue.put(
+            {
+                "data_block": sample.batch_tensor.numpy()[0, ...],
+                "i": i,
+                "batch_super_chunk": sample.batch_super_chunk[0],
+                "batch_internal_slice": sample.batch_internal_slice,
+            },
+            block=True,
+        )
+        logger.info(f"[+] Worker {worker_pid} setting block {i}")
+
+    for i in range(n_consumers):
+        producer_queue.put_nowait(None)
+
+    # zarr_dataset.lazy_data.shape
+    logger.info(f"[+] Worker {worker_pid} -> Producer finished producing data.")
+
+
+def consumer(
+    queue,
+    zarr_dataset,
+    worker_params,
+    results_dict,
+):
+    logger = worker_params["logger"]
+    worker_results = {}
+    worker_pid = os.getpid()
+    logger.info(f"Starting consumer worker -> {worker_pid}")
+
+    # # Setting initial wait so all processes could be created
+    # # And producer can start generating data
+    # sleep(60)
+
+    # Start processing
+    total_samples = sum(zarr_dataset.internal_slice_sum)
+
+    while True:
+        # streamed_dict = None
+        # try:
+        streamed_dict = queue.get(block=True)
+
+        # except Empty:
+        #     logger.info(f"[-] Worker {worker_pid} -> No more data received. Exiting...")
+        #     break
+
+        if streamed_dict is None:
+            logger.info(f"[-] Worker {worker_pid} -> Turn off signal received...")
+            break
+
+        logger.info(
+            f"[-] Worker {worker_pid} -> Consuming {streamed_dict['i']} - {streamed_dict['data_block'].shape} - Super chunk val: {zarr_dataset.curr_super_chunk_pos.value} - internal slice sum: {total_samples}"
+        )
+
+        # Simulate some processing
+        worker_response = execute_worker(
+            data_block=streamed_dict["data_block"],
+            multichannel_spots=worker_params["multichannel_spots"],
+            stats_parameters=worker_params["stats_parameters"],
+            batch_super_chunk=streamed_dict["batch_super_chunk"],
+            batch_internal_slice=streamed_dict["batch_internal_slice"],
+            overlap_prediction_chunksize=worker_params["overlap_prediction_chunksize"],
+            dataset_shape=worker_params["dataset_shape"],
+            logger=logger,
+        )
+
+        for curr_channel_name, worker_spots in worker_response.items():
+
+            if curr_channel_name not in worker_results:
+                worker_results[curr_channel_name] = None
+
+            if worker_spots is not None:
+                worker_spots = worker_spots.astype(np.float32)
+
+                # Adding worker response to multichannel global dictionary
+                if worker_results[curr_channel_name] is None:
+                    worker_results[curr_channel_name] = worker_spots.copy()
+
+                else:
+                    worker_results[curr_channel_name] = np.append(
+                        worker_results[curr_channel_name],
+                        worker_spots,
+                        axis=0,
+                    )
+
+    logger.info(f"[-] Worker {worker_pid} -> Consumer finished consuming data.")
+    results_dict[worker_pid] = worker_results
+
+
 def z1_multichannel_stats(
     dataset_path: PathLike,
     multiscale: str,
@@ -432,15 +534,15 @@ def z1_multichannel_stats(
 
     lazy_data = image_reader.as_dask_array()
 
-    image_metadata = image_reader.metadata()
+    # image_metadata = image_reader.metadata()
 
-    logger.info(f"Full image metadata: {image_metadata}")
+    # logger.info(f"Full image metadata: {image_metadata}")
 
-    image_metadata = utils.parse_zarr_metadata(
-        metadata=image_metadata, multiscale=multiscale
-    )
+    # image_metadata = utils.parse_zarr_metadata(
+    #     metadata=image_metadata, multiscale=multiscale
+    # )
 
-    logger.info(f"Filtered Image metadata: {image_metadata}")
+    # logger.info(f"Filtered Image metadata: {image_metadata}")
 
     overlap_prediction_chunksize = (axis_pad, axis_pad, axis_pad)
     zarr_data_loader, zarr_dataset = create_data_loader(
@@ -467,78 +569,64 @@ def z1_multichannel_stats(
 
     start_time = time()
 
-    total_batches = np.prod(zarr_dataset.lazy_data.shape) / (
-        np.prod(zarr_dataset.prediction_chunksize) * batch_size
-    )
+    total_batches = sum(zarr_dataset.internal_slice_sum) / batch_size
+
     # samples_per_iter = n_workers * batch_size
     logger.info(f"Number of batches: {total_batches}")
+
+    # Variables for multiprocessing
+    multichannel_final_spots = {key: None for key in list(multichannel_spots.keys())}
 
     # Setting exec workers to CO CPUs
     exec_n_workers = co_cpus
 
-    # Create a pool of processes
-    pool = multiprocessing.Pool(processes=exec_n_workers)
+    # Create consumer processes
+    factor = 10
 
-    # Variables for multiprocessing
-    picked_blocks = []
-    curr_picked_blocks = 0
-    multichannel_final_spots = {key: None for key in list(multichannel_spots.keys())}
+    # Create a multiprocessing queue
+    producer_queue = multiprocessing.Queue(maxsize=exec_n_workers * factor)
 
-    for i, sample in enumerate(zarr_data_loader):
-        logger.info(
-            f"Batch {i}: {sample.batch_tensor.shape} - Pinned?: {sample.batch_tensor.is_pinned()} - dtype: {sample.batch_tensor.dtype} - device: {sample.batch_tensor.device}"
+    worker_params = {
+        "multichannel_spots": multichannel_spots,
+        "stats_parameters": stats_parameters,
+        "overlap_prediction_chunksize": overlap_prediction_chunksize,
+        "dataset_shape": zarr_dataset.lazy_data.shape,
+        "multichannel_final_spots": multichannel_final_spots,
+        "logger": logger,
+    }
+
+    results_dict = manager.dict()
+
+    logger.info(f"Setting up {exec_n_workers} workers...")
+    consumers = [
+        multiprocessing.Process(
+            target=consumer,
+            args=(
+                producer_queue,
+                zarr_dataset,
+                worker_params,
+                results_dict,
+            ),
         )
+        for _ in range(exec_n_workers)
+    ]
 
-        picked_blocks.append(
-            {
-                "data_block": sample.batch_tensor.numpy()[0, ...],
-                "multichannel_spots": multichannel_spots,
-                "stats_parameters": stats_parameters,
-                "batch_super_chunk": sample.batch_super_chunk[0],
-                "batch_internal_slice": sample.batch_internal_slice,
-                "overlap_prediction_chunksize": overlap_prediction_chunksize,
-                "dataset_shape": zarr_dataset.lazy_data.shape,
-                "logger": logger,
-            }
-        )
+    # Start consumer processes
+    for consumer_process in consumers:
+        consumer_process.start()
 
-        curr_picked_blocks += 1
+    # Main process acts as the producer
+    producer(producer_queue, zarr_data_loader, logger, exec_n_workers)
 
-        if curr_picked_blocks == exec_n_workers:
+    # Wait for consumer processes to finish
+    for consumer_process in consumers:
+        consumer_process.join()
 
-            helper_submit_jobs(
-                pool=pool,
-                picked_blocks=picked_blocks,
-                multichannel_final_spots=multichannel_final_spots,
-                logger=logger,
-            )
+    print(results_dict.values())
+    print(results_dict.keys())
+    print("ITEMS: ", results_dict.items())
 
-            # Setting variables back to init
-            curr_picked_blocks = 0
-            picked_blocks = []
-
-    # processing blocks not scheduled
-    if curr_picked_blocks != 0:
-
-        helper_submit_jobs(
-            pool=pool,
-            picked_blocks=picked_blocks,
-            multichannel_final_spots=multichannel_final_spots,
-            logger=logger,
-        )
-
-        # Setting variables back to init
-        curr_picked_blocks = 0
-        picked_blocks = []
-
-    for spot_channel_name in multichannel_final_spots.keys():
-        final_spots = multichannel_final_spots[spot_channel_name].astype(np.float32)
-
-        # Saving spots
-        np.save(
-            f"/results/ch_{channel_name}_spots_{spot_channel_name}.npy",
-            spots_global_coordinate_prunned,
-        )
+    print("All processes finished.")
 
     end_time = time()
 
@@ -555,3 +643,37 @@ def z1_multichannel_stats(
             output_folder,
             "z1_stats",
         )
+
+
+def main():
+    dataset_path = "s3://aind-open-data/HCR_BL6-000_2023-06-1_00-00-00_fused_2024-04-02_20-06-14/channel_1.zarr"
+    # Code Ocean folders
+    RESULTS_FOLDER = Path(os.path.abspath("../results"))
+
+    # Output folder
+    output_folder = RESULTS_FOLDER.joinpath("puncta_stats")
+    utils.create_folder(dest_dir=str(output_folder), verbose=True)
+    logger = utils.create_logger(output_log_path=str(output_folder))
+    stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
+    multichannel_spots = {
+        "channel_1": np.load("/Users/camilo.laiton/Downloads/spots_ch1.npy"),
+    }
+
+    z1_multichannel_stats(
+        dataset_path=dataset_path,
+        multiscale="0",
+        multichannel_spots=multichannel_spots,
+        prediction_chunksize=(128, 128, 128),
+        target_size_mb=3048,
+        n_workers=0,
+        axis_pad=14,
+        batch_size=1,
+        output_folder=output_folder.joinpath("channel_1"),
+        stats_parameters=stats_parameters,
+        logger=logger,
+        super_chunksize=None,
+    )
+
+
+if __name__ == "__main__":
+    main()
