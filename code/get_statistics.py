@@ -13,13 +13,14 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import psutil
 import torch
-from _shared.types import ArrayLike, PathLike
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
     recover_global_position, unpad_global_coords)
 from aind_large_scale_prediction.io import ImageReaderFactory
-from get_spot_chn_stats import get_spot_chn_stats
 from scipy import spatial
+
+from _shared.types import ArrayLike, PathLike
+from get_spot_chn_stats import get_spot_chn_stats
 from utils import utils
 
 
@@ -492,9 +493,6 @@ def z1_multichannel_stats(
     multichannel_final_spots = {key: None for key in list(multichannel_spots.keys())}
 
     for i, sample in enumerate(zarr_data_loader):
-        if i == 2000:
-            logger.info(f"Worker {os.getpid()} -> Induced breaking!")
-            break
 
         logger.info(
             f"Batch {i}: {sample.batch_tensor.shape} - Pinned?: {sample.batch_tensor.is_pinned()} - dtype: {sample.batch_tensor.dtype} - device: {sample.batch_tensor.device}"
@@ -547,7 +545,7 @@ def z1_multichannel_stats(
 
         # Saving spots
         np.save(
-            f"/results/ch_{channel_name}_spots_{spot_channel_name}.npy",
+            f"{output_folder}/ch_{channel_name}_spots_{spot_channel_name}.npy",
             final_spots,
         )
 

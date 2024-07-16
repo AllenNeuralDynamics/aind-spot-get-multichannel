@@ -14,13 +14,14 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import psutil
 import torch
-from _shared.types import ArrayLike, PathLike
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
     recover_global_position, unpad_global_coords)
 from aind_large_scale_prediction.io import ImageReaderFactory
-from get_spot_chn_stats import get_spot_chn_stats
 from scipy import spatial
+
+from _shared.types import ArrayLike, PathLike
+from get_spot_chn_stats import get_spot_chn_stats
 from utils import utils
 
 
@@ -326,9 +327,6 @@ def producer(
 
     logger.info(f"Starting producer queue: {worker_pid}")
     for i, sample in enumerate(zarr_data_loader):
-        if i == 2000:
-            logger.info(f"Worker {worker_pid} -> Induced breaking!")
-            break
 
         producer_queue.put(
             {
@@ -342,7 +340,7 @@ def producer(
         logger.info(f"[+] Worker {worker_pid} setting block {i}")
 
     for i in range(n_consumers):
-        producer_queue.put_nowait(None)
+        producer_queue.put(None, block=True)
 
     # zarr_dataset.lazy_data.shape
     logger.info(f"[+] Worker {worker_pid} -> Producer finished producing data.")
@@ -359,8 +357,8 @@ def consumer(
     worker_pid = os.getpid()
     logger.info(f"Starting consumer worker -> {worker_pid}")
 
-    # # Setting initial wait so all processes could be created
-    # # And producer can start generating data
+    # Setting initial wait so all processes could be created
+    # And producer can start generating data
     # sleep(60)
 
     # Start processing
@@ -622,11 +620,34 @@ def z1_multichannel_stats(
     for consumer_process in consumers:
         consumer_process.join()
 
-    print(results_dict.values())
-    print(results_dict.keys())
-    print("ITEMS: ", results_dict.items())
+    multichannel_final_spots = {key: None for key in list(multichannel_spots.keys())}
+    channel_names = list(multichannel_final_spots.keys())
+    for worker_id, spots_channel in results_dict.items():
 
-    print("All processes finished.")
+        for channel_name in channel_names:
+            curr_spots = spots_channel[channel_name]
+            logger.info(
+                f"Worker {worker_id} computed {curr_spots.shape[0]} spots in channel  {channel_name}"
+            )
+            if multichannel_final_spots[channel_name] is None:
+                multichannel_final_spots[channel_name] = curr_spots
+
+            else:
+                multichannel_final_spots[channel_name] = np.append(
+                    multichannel_final_spots[channel_name],
+                    curr_spots,
+                    axis=0,
+                )
+
+    # Saving
+    for spot_channel_name in multichannel_final_spots.keys():
+        final_spots = multichannel_final_spots[spot_channel_name].astype(np.float32)
+
+        # Saving spots
+        np.save(
+            f"{output_folder}/ch_{channel_name}_spots_{spot_channel_name}.npy",
+            final_spots,
+        )
 
     end_time = time()
 
