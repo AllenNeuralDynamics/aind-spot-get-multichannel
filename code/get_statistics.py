@@ -258,60 +258,6 @@ def _execute_worker(params: Dict):
     return execute_worker(**params)
 
 
-def helper_submit_jobs(
-    pool: multiprocessing.Pool,
-    picked_blocks: List[Dict],
-    multichannel_final_spots: Dict,
-    logger: logging.Logger,
-):
-    """
-    Helper function to submit jobs.
-
-    Parameters
-    ----------
-    pool: multiprocessing.Pool
-        Pool object of processes.
-
-    picked_blocks: List[Dict]
-        List of dictionaries with the parameters
-        for submitting the jobs.
-
-    multichannel_final_spots: Dict
-        Dictionary where the final outputs will be saved.
-
-    logger: logging.Logger
-        Logging object
-    """
-
-    # Assigning blocks to execution workers
-    jobs = [
-        pool.apply_async(_execute_worker, args=(picked_block,))
-        for picked_block in picked_blocks
-    ]
-
-    logger.info(f"Dispatcher PID {os.getpid()} dispatching {len(jobs)} jobs")
-
-    # Wait for all processes to finish
-    for job in jobs:
-        worker_response = job.get()
-
-        # Worker response is a dictionary
-        for curr_channel_name, worker_spots in worker_response.items():
-
-            if worker_spots is not None:
-                worker_spots = worker_spots.astype(np.float32)
-                # Adding worker response to multichannel global dictionary
-                if multichannel_final_spots[curr_channel_name] is None:
-                    multichannel_final_spots[curr_channel_name] = worker_spots.copy()
-
-                else:
-                    multichannel_final_spots[curr_channel_name] = np.append(
-                        multichannel_final_spots[curr_channel_name],
-                        worker_spots,
-                        axis=0,
-                    )
-
-
 def producer(
     producer_queue,
     zarr_data_loader,
