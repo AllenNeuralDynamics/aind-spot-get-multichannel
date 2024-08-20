@@ -51,37 +51,5 @@ def run():
     )
 
 
-#     statistic_channels = ["channel_1"]#, "channel_2", "channel_3"]
-
-#     for chn_idx in range(len(statistic_channels)):
-#         curr_channel_name = statistic_channels[chn_idx]
-
-#         chns_to_process = {
-#             chn: multichannel_spots[chn]
-#             for chn in statistic_channels
-# #             if chn != curr_channel_name
-#         }
-
-#         print(
-#             f"Base channel: {curr_channel_name} - Spot channels: {list(chns_to_process.keys())}"
-#         )
-
-#         dataset_path = f"{IMAGE_PATH}/{curr_channel_name}.zarr"
-#         z1_multichannel_stats(
-#             dataset_path=dataset_path,
-#             multiscale="0",
-#             multichannel_spots=chns_to_process,
-#             prediction_chunksize=(128, 128, 128),
-#             target_size_mb=3048,
-#             n_workers=0,
-#             axis_pad=14,
-#             batch_size=1,
-#             output_folder=f"./results/{curr_channel_name}",
-#             stats_parameters=stats_parameters,
-#             logger=logger,
-#             super_chunksize=None,
-#         )
-
-
 if __name__ == "__main__":
     run()
