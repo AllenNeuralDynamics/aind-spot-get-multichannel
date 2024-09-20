@@ -12,11 +12,12 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import psutil
-from _shared.types import ArrayLike, PathLike
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
     recover_global_position, unpad_global_coords)
 from aind_large_scale_prediction.io import ImageReaderFactory
+
+from _shared.types import ArrayLike, PathLike
 from get_spot_chn_stats import get_spot_chn_stats
 from utils import utils
 
@@ -64,7 +65,6 @@ def get_points_in_boundaries(
     location_slices: Tuple[ArrayLike],
     shift: Optional[bool] = True,
     unpadded_local_slice=None,
-    #     data_block=None, chn_name=None,
 ) -> ArrayLike:
     """
     Returns the points that fill within a given
@@ -96,30 +96,22 @@ def get_points_in_boundaries(
     start_condition = np.all(points[:, :3] >= start_slices, axis=1)
     stop_condition = np.all(points[:, :3] < stop_slices, axis=1)
 
-    extracted_rows_global = points[:, :3][
-        np.logical_and(start_condition, stop_condition)
-    ]
+    extracted_rows_global = points[np.where(start_condition & stop_condition)]
 
     if not extracted_rows_global.shape[0]:
         return None
 
-    #     print(f"{os.getpid()} -> start: {start_slices} - end: {stop_slices} -> extracted: {extracted_rows_global}")
     returned_spots = extracted_rows_global
 
+    # If shifting is enabled, shift points to the local coordinate system
     if shift:
-        #         min_zyx = np.min(extracted_rows, axis=0)
-        extracted_rows_local = extracted_rows_global - start_slices  # min_zyx
-        extracted_rows_local = remove_points_in_pad_area(
-            points=extracted_rows_local, unpadded_slices=unpadded_local_slice
+        extracted_rows_global[:, :3] = extracted_rows_global[:, :3] - start_slices
+        returned_spots = remove_points_in_pad_area(
+            points=extracted_rows_global, unpadded_slices=unpadded_local_slice
         )
-        returned_spots = extracted_rows_local
-    #         np.save(f"/results/test_spots_{start_slices.flatten()}-{stop_slices.flatten()}_chn_{chn_name}.npy", extracted_rows_local)
-    #         np.save(f"/results/test_block_{start_slices.flatten()}-{stop_slices.flatten()}_chn_{chn_name}.npy", data_block)
 
-    #     print(f"{os.getpid()} -> after shifting extracted: {returned_spots}")
-    #     exit()
     if not returned_spots.shape[0]:
-        returned_spots = None
+        return None
 
     return returned_spots
 
@@ -207,8 +199,6 @@ def execute_worker(
                 np.array(global_coord_positions_end),
             ),
             shift=True,
-            #             data_block=data_block,
-            #             chn_name=spot_channel_name,
             unpadded_local_slice=unpadded_local_slice,
         )
 
@@ -231,13 +221,8 @@ def execute_worker(
             :, -3:
         ] + np.array(spot_with_statistics[:, :3])
 
-        #         # Removing points within pad area
-        #         spot_with_statistics = remove_points_in_pad_area(
-        #             points=spot_with_statistics, unpadded_slices=unpadded_global_slice
-        #         )
-
         logger.info(
-            f"Worker {curr_pid}: Found {spot_with_statistics.shape} spots in global coords: {unpadded_global_slice}"
+            f"Worker {curr_pid}: Found {spot_with_statistics.shape} {spot_with_statistics[0]} spots in global coords: {unpadded_global_slice}"
         )
 
         worker_spt_chn_statistics[spot_channel_name] = spot_with_statistics.copy()
@@ -617,7 +602,7 @@ def z1_multichannel_stats(
     # Saving
     for spot_channel_name in multichannel_final_spots.keys():
         final_spots = multichannel_final_spots[spot_channel_name].astype(np.float32)
-
+        print(f"Final spots channel {spot_channel_name} - {final_spots.shape}")
         # Saving spots
         np.save(
             f"{output_folder}/ch_{channel_name}_spots_{spot_channel_name}.npy",

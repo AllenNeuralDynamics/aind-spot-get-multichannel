@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import numpy as np
+
 from get_statistics import z1_multichannel_stats
 from utils import utils
 
@@ -22,19 +23,20 @@ def run():
 
     logger = utils.create_logger(output_log_path=str(output_folder))
 
-    IMAGE_PATH = (
-        f"{DATA_FOLDER}/HCR_BL6-000_2023-06-1_00-00-00_fused_2024-04-02_20-06-14"
-    )
+    IMAGE_PATH = f"{DATA_FOLDER}/HCR_736207.01_2024-07-25_13-00-00"
 
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
 
     multichannel_spots = {
-        "channel_1": np.load(f"{DATA_FOLDER}/HCR_BL6_000_spot_detection_ch1/spots.npy"),
-        "channel_2": np.load(f"{DATA_FOLDER}/HCR_BL6_000_spot_detection_ch2/spots.npy"),
-        "channel_3": np.load(f"{DATA_FOLDER}/HCR_BL6_000_spot_detection_ch4/spots.npy"),
+        "488": np.load(
+            f"{DATA_FOLDER}/HCR_736207-01_2024-07-25_13-00-00-spots-488/spots.npy"
+        ),
+        "638": np.load(
+            f"{DATA_FOLDER}/HCR_736207_01_2024-07-25_13-00-00-spots-638/spots.npy"
+        ),
     }
 
-    dataset_path = f"{IMAGE_PATH}/channel_4.zarr"
+    dataset_path = f"{IMAGE_PATH}/fused/channel_488.zarr"
     z1_multichannel_stats(
         dataset_path=dataset_path,
         multiscale="0",
