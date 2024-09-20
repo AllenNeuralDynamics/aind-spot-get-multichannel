@@ -649,7 +649,7 @@ def main():
     RESULTS_FOLDER = Path(os.path.abspath("../results"))
 
     # Output folder
-    output_folder = RESULTS_FOLDER.joinpath("puncta_stats")
+    output_folder = RESULTS_FOLDER
     utils.create_folder(dest_dir=str(output_folder), verbose=True)
     logger = utils.create_logger(output_log_path=str(output_folder))
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
