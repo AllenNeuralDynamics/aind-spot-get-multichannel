@@ -62,7 +62,7 @@ def scan_bbox(
         ]
 
 
-def estimate_background_foreground(
+def estimate_foreground_background_intensities(
     buffer_context: ArrayLike,
     context_radius: int,
     background_percentile: Optional[float] = 1.0,
@@ -186,7 +186,7 @@ def get_spot_chn_stats(
     # Estimating spots foreground - background
     spots_fg_bg = np.array(
         [
-            estimate_background_foreground(
+            estimate_foreground_background_intensities(
                 buffer_context=buffer_context,
                 background_percentile=background_percentile,
                 context_radius=context_radius,
@@ -202,7 +202,6 @@ def get_spot_chn_stats(
             f"Worker {os.getpid()} -> Spots in block and given stats are not the same!"
         )
 
-    #     print(f"Worker {os.getpid()} -> spots in block: {spots_in_block.shape} - stats: {spots_fg_bg.shape}")
     # horizontal stacking
     spots_in_block = np.append(spots_in_block.T, spots_fg_bg.T, axis=0).T
 

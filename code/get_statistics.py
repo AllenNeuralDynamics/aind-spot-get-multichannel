@@ -11,6 +11,7 @@ from time import time
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 import psutil
 from aind_large_scale_prediction.generator.dataset import create_data_loader
 from aind_large_scale_prediction.generator.utils import (
@@ -222,7 +223,7 @@ def execute_worker(
         ] + np.array(spot_with_statistics[:, :3])
 
         logger.info(
-            f"Worker {curr_pid}: Found {spot_with_statistics.shape} {spot_with_statistics[0]} spots in global coords: {unpadded_global_slice}"
+            f"Worker {curr_pid}: Found {spot_with_statistics.shape} spots in global coords: {unpadded_global_slice}"
         )
 
         worker_spt_chn_statistics[spot_channel_name] = spot_with_statistics.copy()
@@ -581,20 +582,25 @@ def z1_multichannel_stats(
         consumer_process.join()
 
     multichannel_final_spots = {key: None for key in list(multichannel_spots.keys())}
-    channel_names = list(multichannel_final_spots.keys())
+    spot_channel_names = list(multichannel_final_spots.keys())
     for worker_id, spots_channel in results_dict.items():
 
-        for channel_name in channel_names:
-            curr_spots = spots_channel[channel_name]
+        for spot_channel_name in spot_channel_names:
+            curr_spots = spots_channel[spot_channel_name]
+
+            if curr_spots is None:
+                continue
+
             logger.info(
-                f"Worker {worker_id} computed {curr_spots.shape[0]} spots in channel  {channel_name}"
+                f"Worker {worker_id} computed {curr_spots.shape[0]} spots in channel {spot_channel_name}"
             )
-            if multichannel_final_spots[channel_name] is None:
-                multichannel_final_spots[channel_name] = curr_spots
+
+            if multichannel_final_spots[spot_channel_name] is None:
+                multichannel_final_spots[spot_channel_name] = curr_spots
 
             else:
-                multichannel_final_spots[channel_name] = np.append(
-                    multichannel_final_spots[channel_name],
+                multichannel_final_spots[spot_channel_name] = np.append(
+                    multichannel_final_spots[spot_channel_name],
                     curr_spots,
                     axis=0,
                 )
@@ -603,10 +609,18 @@ def z1_multichannel_stats(
     for spot_channel_name in multichannel_final_spots.keys():
         final_spots = multichannel_final_spots[spot_channel_name].astype(np.float32)
         print(f"Final spots channel {spot_channel_name} - {final_spots.shape}")
+
+        spot_ch_df = pd.DataFrame(
+            final_spots, columns=["Z", "Y", "X", "SEG_ID", "FG", "BG"]
+        )
+
+        spot_ch_df[["Z", "Y", "X"]] = spot_ch_df[["Z", "Y", "X"]].astype("int")
+        spot_ch_df = spot_ch_df.sort_values(by="SEG_ID")
+
         # Saving spots
-        np.save(
-            f"{output_folder}/ch_{channel_name}_spots_{spot_channel_name}.npy",
-            final_spots,
+        spot_ch_df.to_csv(
+            f"{output_folder}/image_data_{channel_name}_versus_spots_{spot_channel_name}.csv",
+            index=False,
         )
 
     end_time = time()

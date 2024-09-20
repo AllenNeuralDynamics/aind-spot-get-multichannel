@@ -36,7 +36,9 @@ def run():
         ),
     }
 
-    dataset_path = f"{IMAGE_PATH}/fused/channel_488.zarr"
+    image_data_channel = "channel_488"
+    dataset_path = f"{IMAGE_PATH}/fused/{image_data_channel}.zarr"
+
     z1_multichannel_stats(
         dataset_path=dataset_path,
         multiscale="0",
@@ -46,7 +48,7 @@ def run():
         n_workers=0,
         axis_pad=14,
         batch_size=1,
-        output_folder=output_folder.joinpath("channel_4"),
+        output_folder=output_folder.joinpath(image_data_channel),
         stats_parameters=stats_parameters,
         logger=logger,
         super_chunksize=None,
