@@ -390,6 +390,7 @@ def z1_multichannel_stats(
     stats_parameters: Dict,
     logger: logging.Logger,
     super_chunksize: Optional[Tuple[int, ...]] = None,
+    segmentation_column: Optional[bool] = True,
 ):
     """
     Chunked large-scale estimation of parameters
@@ -442,6 +443,10 @@ def z1_multichannel_stats(
         time from the raw data. If provided, then
         target_size_mb is ignored. Default: None
 
+    segmentation_column: Optional[bool]
+        If the spots come with the segmentation
+        column. Useful since spot detection can be
+        used without segmentation mask. Default: True
     """
     co_cpus = int(utils.get_code_ocean_cpu_limit())
     channel_name = Path(dataset_path).stem
@@ -606,16 +611,27 @@ def z1_multichannel_stats(
                 )
 
     # Saving
+    columns = ["Z", "Y", "X", "Z_center", "Y_center", "X_center", "dist", "r"]
+    sort_column = "Z"
+    int_columns = ["Z", "Y", "X"]
+
+    # If segmentation mask is provided, let's sort by ID
+    if segmentation_column:
+        columns.append("SEG_ID")
+        sort_column = "SEG_ID"
+        int_columns.append("SEG_ID")
+
+    # Adding new columns
+    columns += ["FG", "BG"]
+
     for spot_channel_name in multichannel_final_spots.keys():
         final_spots = multichannel_final_spots[spot_channel_name].astype(np.float32)
         print(f"Final spots channel {spot_channel_name} - {final_spots.shape}")
 
-        spot_ch_df = pd.DataFrame(
-            final_spots, columns=["Z", "Y", "X", "SEG_ID", "FG", "BG"]
-        )
+        spot_ch_df = pd.DataFrame(final_spots, columns=columns)
 
-        spot_ch_df[["Z", "Y", "X"]] = spot_ch_df[["Z", "Y", "X"]].astype("int")
-        spot_ch_df = spot_ch_df.sort_values(by="SEG_ID")
+        spot_ch_df[int_columns] = spot_ch_df[int_columns].astype("int")
+        spot_ch_df = spot_ch_df.sort_values(by=sort_column)
 
         # Saving spots
         spot_ch_df.to_csv(

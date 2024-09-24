@@ -4,9 +4,49 @@ import os
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
+from _shared.types import ArrayLike, PathLike
 from get_statistics import z1_multichannel_stats
 from utils import utils
+
+
+def load_data(path: PathLike) -> ArrayLike:
+    """
+    Loads the spot data from a CSV or numpy array.
+
+    Parameters
+    ----------
+    path: PathLike
+        Path where the spots are stored.
+
+    Raises
+    ------
+    ValueError
+        If a format different than .csv or .npy
+        is provided.
+
+    Returns
+    -------
+    ArrayLike
+        Numpy array with the spots.
+    """
+
+    path = Path(path)
+    suffix = path.suffix
+    data_np_format = None
+
+    if suffix == ".csv":
+        data_np_format = pd.read_csv(path).to_numpy().astype(np.float32)
+
+    elif suffix == ".npy":
+        data_np_format = np.load(path)
+
+    else:
+        raise ValueError(f"Only .npy and .csv are allowed. Received {suffix}")
+
+    print(data_np_format.shape, data_np_format[0], data_np_format.dtype)
+    return data_np_format
 
 
 def run():
@@ -18,7 +58,7 @@ def run():
     DATA_FOLDER = Path(os.path.abspath("../data"))
 
     # Output folder
-    output_folder = RESULTS_FOLDER.joinpath("puncta_stats")
+    output_folder = RESULTS_FOLDER
     utils.create_folder(dest_dir=str(output_folder), verbose=True)
 
     logger = utils.create_logger(output_log_path=str(output_folder))
@@ -28,10 +68,10 @@ def run():
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
 
     multichannel_spots = {
-        "488": np.load(
+        "488": load_data(
             f"{DATA_FOLDER}/HCR_736207-01_2024-07-25_13-00-00-spots-488/spots.npy"
         ),
-        "638": np.load(
+        "638": load_data(
             f"{DATA_FOLDER}/HCR_736207_01_2024-07-25_13-00-00-spots-638/spots.npy"
         ),
     }
@@ -52,6 +92,7 @@ def run():
         stats_parameters=stats_parameters,
         logger=logger,
         super_chunksize=None,
+        segmentation_column=True,
     )
 
 
