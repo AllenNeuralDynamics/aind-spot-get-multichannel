@@ -13,9 +13,16 @@ If we are computing stats for channel 488 with spots from channel 488 and 638, t
 
 The CSV has the following columns:
 
-- Z: Z position of the spot.
-- Y: Y position of the spot.
-- X: X position of the spot.
-- SEG_ID: Segmentation ID of the cell the spot belongs to.
+The output of this algorithm is a CSV file with the following columns. These columns come from the provided CSV except from foreground (FG) and background (BG):
+
+- Z: Z location of the spot.
+- Y: Y location of the spot.
+- X: X location of the spot.
+- Z_center: Z center of the spot during the guassian fitting, useful for demixing.
+- Y_center: Y center of the spot during the guassian fitting, useful for demixing.
+- X_center: X center of the spot during the guassian fitting, useful for demixing.
+- dist: Euclidean distance or L2 norm of the ZYX center vector, $`norm = \sqrt{z^2 + y^2 + x^2}`$.
+- r: Pearson correlation coefficient between integrated 3D gaussian and the 3D context where the spot is located.
+- SEG_ID (optional): When a segmentation mask is provided, a new column is added with the segmentation ID of the detected spot.
 - FG: Spot foreground intensity.
 - BG: Spot background intensity.
