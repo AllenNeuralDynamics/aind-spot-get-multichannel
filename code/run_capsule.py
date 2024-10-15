@@ -61,14 +61,15 @@ def run():
     # Output folder
     output_folder = RESULTS_FOLDER
 
-    utils.create_folder(dest_dir=str(output_folder), verbose=True)
-    logger = utils.create_logger(output_log_path=str(output_folder))
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
 
     data_channels = list(DATA_FOLDER.glob("channel*.zarr"))
     spot_paths = [folder for folder in DATA_FOLDER.glob("*spots-488*") if folder.is_dir()]
 
     if len(data_channels) and len(spot_paths):
+        utils.create_folder(dest_dir=str(output_folder), verbose=True)
+        logger = utils.create_logger(output_log_path=str(output_folder))
+        
         dataset_path = data_channels[0]
         multichannel_spots = {}
         
