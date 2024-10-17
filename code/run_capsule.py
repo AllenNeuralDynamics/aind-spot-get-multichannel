@@ -118,7 +118,7 @@ def run():
                 multiscale="0",
                 multichannel_spots=multichannel_spots,
                 prediction_chunksize=(128, 128, 128),
-                target_size_mb=3072,
+                target_size_mb=2048,
                 n_workers=0,
                 axis_pad=14,
                 batch_size=1,
