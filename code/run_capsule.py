@@ -58,21 +58,22 @@ def run():
     # SCRATCH_FOLDER = Path(os.path.abspath("../scratch"))
     DATA_FOLDER = Path(os.path.abspath("../data/"))
 
-    # Output folder
-    output_folder = RESULTS_FOLDER
+    SPOTS_FOLDER = DATA_FOLDER.joinpath("spots_folder")
 
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
 
     data_channels = list(DATA_FOLDER.glob("*/fused/channel*.zarr"))
-    spot_paths = [folder for folder in DATA_FOLDER.glob("*spots-638*") if folder.is_dir()]
+
+    if len(data_channels):
+        raise FileNotFoundError("No data channels were provided")
+    
+    dataset_path = data_channels[0]
+    spot_paths = [folder for folder in SPOTS_FOLDER.glob("*") if folder.is_dir()]
 
     print(f'spots paths {spot_paths} data_channels {data_channels}')
 
-    if len(data_channels) and len(spot_paths):
-        utils.create_folder(dest_dir=str(output_folder), verbose=True)
-        logger = utils.create_logger(output_log_path=str(output_folder))
+    if len(spot_paths):
         
-        dataset_path = data_channels[0]
         multichannel_spots = {}
         
         for spot_path in spot_paths:
@@ -81,14 +82,14 @@ def run():
                 channel_wavelength = match.group(1)
                 channel_data_path = spot_path.joinpath("spots.npy")
                 
-                logger.info(f"Loading data from {channel_data_path}")
+                print(f"Loading data from {channel_data_path}")
 
                 multichannel_spots[channel_wavelength] = load_data(
                     str(channel_data_path)
                 )
 
             else:
-                logger.info(f"There was a problem finding data for {spot_path}")
+                print(f"There was a problem finding data for {spot_path}")
 
 
         if len(multichannel_spots):
@@ -108,6 +109,9 @@ def run():
             dataset_path = f"{IMAGE_PATH}/fused/{image_data_channel}.zarr"
             image_data_channel = image_path.stem
             """
+            output_folder = output_folder.joinpath(dataset_path.stem)
+            utils.create_folder(dest_dir=str(output_folder), verbose=True)
+            logger = utils.create_logger(output_log_path=str(output_folder))
 
             z1_multichannel_stats(
                 dataset_path=dataset_path,
