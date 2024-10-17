@@ -56,15 +56,17 @@ def run():
     # Code Ocean folders
     RESULTS_FOLDER = Path(os.path.abspath("../results"))
     # SCRATCH_FOLDER = Path(os.path.abspath("../scratch"))
-    DATA_FOLDER = Path(os.path.abspath("../data"))
+    DATA_FOLDER = Path(os.path.abspath("../data/"))
 
     # Output folder
     output_folder = RESULTS_FOLDER
 
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
 
-    data_channels = list(DATA_FOLDER.glob("channel*.zarr"))
-    spot_paths = [folder for folder in DATA_FOLDER.glob("*spots-488*") if folder.is_dir()]
+    data_channels = list(DATA_FOLDER.glob("*/fused/channel*.zarr"))
+    spot_paths = [folder for folder in DATA_FOLDER.glob("*spots-638*") if folder.is_dir()]
+
+    print(f'spots paths {spot_paths} data_channels {data_channels}')
 
     if len(data_channels) and len(spot_paths):
         utils.create_folder(dest_dir=str(output_folder), verbose=True)
