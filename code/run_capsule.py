@@ -63,8 +63,9 @@ def run():
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
 
     data_channels = list(DATA_FOLDER.glob("*.zarr"))
+    print(data_channels)
 
-    if len(data_channels):
+    if not len(data_channels):
         raise FileNotFoundError("No data channels were provided")
     
     dataset_path = data_channels[0]
