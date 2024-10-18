@@ -62,8 +62,18 @@ def run():
 
     stats_parameters = {"buffer_radius": 6, "context_radius": 3, "bkg_percentile": 1}
 
-    data_channels = list(DATA_FOLDER.glob("*.zarr"))
-    print(data_channels)
+    spot_dict_path = list(DATA_FOLDER.glob("spot_channel_*.json"))
+    
+    if not len(spot_dict_path):
+        raise FileNotFoundError("No spot channel dictionary was found!")
+
+    spot_dict = utils.read_json_as_dict(spot_dict_path[0])
+    spot_channel = spot_dict.get("spot_channels")
+    if spot_channel is None:
+        raise ValueError("Please, provide a spot channel in the dictionary")
+
+    # Data
+    data_channels = list(DATA_FOLDER.glob(f"*{spot_channel}.zarr"))
 
     if not len(data_channels):
         raise FileNotFoundError("No data channels were provided")
