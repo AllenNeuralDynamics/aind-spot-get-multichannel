@@ -120,7 +120,7 @@ def run():
             dataset_path = f"{IMAGE_PATH}/fused/{image_data_channel}.zarr"
             image_data_channel = image_path.stem
             """
-            output_folder = RESULTS_FOLDER.joinpath(dataset_path.stem)
+            output_folder = RESULTS_FOLDER.joinpath(f"{dataset_path.stem}_stats")
             utils.create_folder(dest_dir=str(output_folder), verbose=True)
             logger = utils.create_logger(output_log_path=str(output_folder))
 
