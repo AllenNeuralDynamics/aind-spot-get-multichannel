@@ -79,7 +79,7 @@ def run():
         raise FileNotFoundError("No data channels were provided")
     
     dataset_path = data_channels[0]
-    spot_paths = [folder for folder in SPOTS_FOLDER.glob("*") if folder.is_dir() and ".zarr" not in str(folder)]
+    spot_paths = [folder for folder in SPOTS_FOLDER.glob("*_spots") if folder.is_dir() and ".zarr" not in str(folder)]
 
     print(f'spots paths {spot_paths} data_channels {data_channels}')
 
@@ -88,7 +88,7 @@ def run():
         multichannel_spots = {}
         
         for spot_path in spot_paths:
-            match = re.search(r'(\d{3})$', spot_path.stem)
+            match = re.search(r'(\d{3})_spots$', spot_path.stem)
             if match and spot_path.joinpath("spots.npy").exists():
                 channel_wavelength = match.group(1)
                 channel_data_path = spot_path.joinpath("spots.npy")
