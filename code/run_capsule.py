@@ -11,6 +11,24 @@ from _shared.types import ArrayLike, PathLike
 from get_statistics import z1_multichannel_stats
 from utils import utils
 
+def strip_all_suffixes(path: Path) -> str:
+    """
+    Strips all suffixes from path
+
+    parameters
+    ----------
+    path: Path
+        Dataset path
+
+    Returns
+    -------
+    str
+        String with all stripped suffixes
+    """
+    name = path.name
+    for suffix in path.suffixes:
+        name = name[: -len(suffix)]
+    return name
 
 def load_data(path: PathLike) -> ArrayLike:
     """
@@ -120,7 +138,8 @@ def run():
             dataset_path = f"{IMAGE_PATH}/fused/{image_data_channel}.zarr"
             image_data_channel = image_path.stem
             """
-            output_folder = RESULTS_FOLDER.joinpath(f"{dataset_path.stem}_stats")
+            stripped_dataset_path = stripped_suffixes = strip_all_suffixes(path=dataset_path)
+            output_folder = RESULTS_FOLDER.joinpath(f"{stripped_dataset_path}_stats")
             utils.create_folder(dest_dir=str(output_folder), verbose=True)
             logger = utils.create_logger(output_log_path=str(output_folder))
 
