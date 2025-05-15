@@ -73,7 +73,7 @@ def run():
         raise ValueError("Please, provide a spot channel in the dictionary")
 
     # Data
-    data_channels = list(DATA_FOLDER.glob(f"*{spot_channel}.zarr"))
+    data_channels = list(DATA_FOLDER.glob(f"*{spot_channel}*.zarr"))
 
     if not len(data_channels):
         raise FileNotFoundError("No data channels were provided")
