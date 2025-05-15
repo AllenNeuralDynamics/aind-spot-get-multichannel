@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 import matplotlib.pyplot as plt
 import psutil
 import json
+from pathlib import Path
 
 
 def profile_resources(
@@ -416,3 +417,22 @@ def read_json_as_dict(filepath: str) -> dict:
             dictionary = json.load(json_file)
 
     return dictionary
+
+def strip_all_suffixes(path: Path) -> str:
+    """
+    Strips all suffixes from path
+
+    parameters
+    ----------
+    path: Path
+        Dataset path
+
+    Returns
+    -------
+    str
+        String with all stripped suffixes
+    """
+    name = path.name
+    for suffix in path.suffixes:
+        name = name[: -len(suffix)]
+    return name

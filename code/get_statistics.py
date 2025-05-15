@@ -449,7 +449,7 @@ def z1_multichannel_stats(
         used without segmentation mask. Default: True
     """
     co_cpus = int(utils.get_code_ocean_cpu_limit())
-    channel_name = Path(dataset_path).stem
+    channel_name = utils.strip_all_suffixes(dataset_path)
     utils.create_folder(dest_dir=str(output_folder), verbose=True)
 
     if n_workers > co_cpus:
