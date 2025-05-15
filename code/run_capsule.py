@@ -88,7 +88,7 @@ def run():
         multichannel_spots = {}
         
         for spot_path in spot_paths:
-            match = re.search(r'(\d{3})_spots$', spot_path.stem)
+            match = re.search(r'(\d{3})*_spots$', spot_path.stem)
             if match and spot_path.joinpath("spots.npy").exists():
                 channel_wavelength = match.group(1)
                 channel_data_path = spot_path.joinpath("spots.npy")
