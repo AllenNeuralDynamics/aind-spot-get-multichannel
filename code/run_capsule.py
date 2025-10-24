@@ -137,7 +137,7 @@ def run():
                 stats_parameters=stats_parameters,
                 logger=logger,
                 super_chunksize=None,
-                segmentation_column=True,
+                segmentation_column=False,
             )
         
         else:
