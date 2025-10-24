@@ -68,11 +68,14 @@ def run():
 
     spot_dict = utils.read_json_as_dict(spot_dict_path[0])
     spot_channel = spot_dict.get("spot_channels")
+    tiles_info = spot_dict.get("tiles", [])
+    tile_name = tiles_info[0].get("tile_name", "Tile")
+
     if spot_channel is None:
         raise ValueError("Please, provide a spot channel in the dictionary")
 
     # Data
-    data_channels = list(DATA_FOLDER.glob(f"*{spot_channel}*.zarr"))
+    data_channels = list(DATA_FOLDER.glob(f"{tile_name}*{spot_channel}*.zarr"))
 
     if not len(data_channels):
         raise FileNotFoundError("No data channels were provided")
