@@ -45,7 +45,7 @@ def load_data(path: PathLike) -> ArrayLike:
     else:
         raise ValueError(f"Only .npy and .csv are allowed. Received {suffix}")
 
-    print(data_np_format.shape, data_np_format[0], data_np_format.dtype)
+    # print(data_np_format.shape, data_np_format[0], data_np_format.dtype)
     return data_np_format
 
 
