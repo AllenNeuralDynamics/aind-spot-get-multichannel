@@ -93,7 +93,7 @@ def run():
             match = re.search(r'(\d{3})_spots$', str(spot_path))
             if match and spot_path.joinpath("spots.npy").exists():
                 channel_wavelength = match.group(1)
-                channel_data_path = spot_path.joinpath("spots.csv")
+                channel_data_path = spot_path.joinpath("spots.npy")
                 
                 print(f"Loading data from {channel_data_path}: wavelength {channel_wavelength}")
 
