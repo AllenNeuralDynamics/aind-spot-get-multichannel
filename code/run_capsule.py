@@ -40,7 +40,7 @@ def load_data(path: PathLike) -> ArrayLike:
         data_np_format = pd.read_csv(path).to_numpy().astype(np.float32)
 
     elif suffix == ".npy":
-        data_np_format = np.load(path)
+        data_np_format = np.load(path, allow_pickle = True)
 
     else:
         raise ValueError(f"Only .npy and .csv are allowed. Received {suffix}")
