@@ -126,7 +126,7 @@ def run():
             output_folder = RESULTS_FOLDER.joinpath(f"{stripped_dataset_path}_stats")
             utils.create_folder(dest_dir=str(output_folder), verbose=True)
             logger = utils.create_logger(output_log_path=str(output_folder))
-
+            xml_path = DATA_FOLDER.joinpath('image_tile_alignment/stitching_cam_alignment_spot_channels.xml')
             z1_multichannel_stats(
                 dataset_path=dataset_path,
                 multiscale="0",
@@ -141,6 +141,7 @@ def run():
                 logger=logger,
                 super_chunksize=None,
                 segmentation_column=False,
+                xml_path = xml_path
             )
         
         else:

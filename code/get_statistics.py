@@ -21,6 +21,8 @@ from aind_large_scale_prediction.io import ImageReaderFactory
 from _shared.types import ArrayLike, PathLike
 from get_spot_chn_stats import get_spot_chn_stats
 from utils import utils
+from utils.apply_camera_alignment import apply_camera_alignment_to_tile_array
+
 
 
 def remove_points_in_pad_area(
@@ -391,6 +393,7 @@ def z1_multichannel_stats(
     logger: logging.Logger,
     super_chunksize: Optional[Tuple[int, ...]] = None,
     segmentation_column: Optional[bool] = True,
+    xml_path: str = None
 ):
     """
     Chunked large-scale estimation of parameters
@@ -497,6 +500,13 @@ def z1_multichannel_stats(
     )
 
     lazy_data = image_reader.as_dask_array()
+
+    if xml_path is not None: 
+        # apply forward camera alignment transforms to each channel
+        lazy_data = apply_camera_alignment_to_tile_array(lazy_data, Path(dataset_path).name, xml_path)
+    else: 
+        xml_path = Path(dataset_path).joinpath('image_tile_alignment/stitching_cam_alignment_spot_channels.xml')
+        lazy_data = apply_camera_alignment_to_tile_array(lazy_data, Path(dataset_path).name, xml_path)
 
     # image_metadata = image_reader.metadata()
 
