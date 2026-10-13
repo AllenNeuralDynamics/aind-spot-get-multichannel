@@ -11,7 +11,6 @@ from _shared.types import ArrayLike, PathLike
 from get_statistics import z1_multichannel_stats
 from utils import utils
 
-
 def load_data(path: PathLike) -> ArrayLike:
     """
     Loads the spot data from a CSV or numpy array.
@@ -46,7 +45,7 @@ def load_data(path: PathLike) -> ArrayLike:
     else:
         raise ValueError(f"Only .npy and .csv are allowed. Received {suffix}")
 
-    print(data_np_format.shape, data_np_format[0], data_np_format.dtype)
+    # print(data_np_format.shape, data_np_format[0], data_np_format.dtype)
     return data_np_format
 
 
@@ -69,11 +68,14 @@ def run():
 
     spot_dict = utils.read_json_as_dict(spot_dict_path[0])
     spot_channel = spot_dict.get("spot_channels")
+    tiles_info = spot_dict.get("tiles", [])
+    tile_name = tiles_info[0].get("tile_name", "Tile")
+
     if spot_channel is None:
         raise ValueError("Please, provide a spot channel in the dictionary")
 
     # Data
-    data_channels = list(DATA_FOLDER.glob(f"*{spot_channel}*.zarr"))
+    data_channels = list(DATA_FOLDER.glob(f"{tile_name}*{spot_channel}*.zarr"))
 
     if not len(data_channels):
         raise FileNotFoundError("No data channels were provided")
@@ -88,12 +90,12 @@ def run():
         multichannel_spots = {}
         
         for spot_path in spot_paths:
-            match = re.search(r'(\d{3})*_spots$', spot_path.stem)
+            match = re.search(r'(\d{3})_spots$', str(spot_path))
             if match and spot_path.joinpath("spots.npy").exists():
                 channel_wavelength = match.group(1)
                 channel_data_path = spot_path.joinpath("spots.npy")
                 
-                print(f"Loading data from {channel_data_path}")
+                print(f"Loading data from {channel_data_path}: wavelength {channel_wavelength}")
 
                 multichannel_spots[channel_wavelength] = load_data(
                     str(channel_data_path)
@@ -120,10 +122,11 @@ def run():
             dataset_path = f"{IMAGE_PATH}/fused/{image_data_channel}.zarr"
             image_data_channel = image_path.stem
             """
-            output_folder = RESULTS_FOLDER.joinpath(f"{dataset_path.stem}_stats")
+            stripped_dataset_path = stripped_suffixes = utils.strip_all_suffixes(path=dataset_path)
+            output_folder = RESULTS_FOLDER.joinpath(f"{stripped_dataset_path}_stats")
             utils.create_folder(dest_dir=str(output_folder), verbose=True)
             logger = utils.create_logger(output_log_path=str(output_folder))
-
+            xml_path = DATA_FOLDER.joinpath('image_tile_alignment/stitching_cam_alignment_spot_channels.xml')
             z1_multichannel_stats(
                 dataset_path=dataset_path,
                 multiscale="0",
@@ -137,7 +140,8 @@ def run():
                 stats_parameters=stats_parameters,
                 logger=logger,
                 super_chunksize=None,
-                segmentation_column=True,
+                segmentation_column=False,
+                xml_path = xml_path
             )
         
         else:
